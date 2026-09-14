@@ -142,19 +142,23 @@ def layout(title, body, extra_js=""):
 </body></html>"""
 
 # ── Email ──────────────────────────────────────────────────
-def send(to, subject, body):
-    if not SMTP_USER:
-        print(f"[EMAIL SKIPPED] {subject}"); return
+def _send_worker(to, subject, body):
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject; msg["From"] = SMTP_USER; msg["To"] = to
         msg.attach(MIMEText(body, "html"))
-        with smtplib.SMTP("smtp.gmail.com", 587) as s:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=20) as s:
             s.starttls(); s.login(SMTP_USER, SMTP_PASS)
             s.sendmail(SMTP_USER, [to], msg.as_string())
         print(f"[EMAIL SENT] {subject}")
     except Exception as e:
         print(f"[EMAIL ERROR] {e}")
+
+def send(to, subject, body):
+    if not SMTP_USER:
+        print(f"[EMAIL SKIPPED] {subject}"); return
+    import threading
+    threading.Thread(target=_send_worker, args=(to, subject, body), daemon=True).start()
 
 def tr(k, v):
     return (f'<tr><td style="padding:8px;border:1px solid #E5E7EB;background:#F9FAFB;'
