@@ -1,15 +1,11 @@
-import sqlite3, uuid, smtplib, os
+import sqlite3, uuid, os, urllib.request, urllib.error, json, threading
 from datetime import datetime
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from flask import Flask, request, redirect, url_for, flash, get_flashed_messages
 from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "office-hours-secret")
 
-SMTP_USER      = os.environ.get("SMTP_USER", "")
-SMTP_PASS      = os.environ.get("SMTP_PASS", "")
 COURSES        = ["BTM 2000", "BTM 3850"]
 INSTRUCTORS    = ["Tracy G", "Kerry G", "Sandip S"]
 SLOT_HOURS     = list(range(10, 15))
@@ -150,21 +146,37 @@ def layout(title, body, extra_js=""):
 
 # ── Email ──────────────────────────────────────────────────
 def _send_worker(to, subject, body):
+    """Send email via Resend API (works on Render free tier)."""
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    sender  = os.environ.get("RESEND_FROM", "")
+    if not api_key or not sender:
+        print(f"[EMAIL SKIPPED] RESEND_API_KEY or RESEND_FROM not set.")
+        return
     try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject; msg["From"] = SMTP_USER; msg["To"] = to
-        msg.attach(MIMEText(body, "html"))
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=20) as s:
-            s.starttls(); s.login(SMTP_USER, SMTP_PASS)
-            s.sendmail(SMTP_USER, [to], msg.as_string())
-        print(f"[EMAIL SENT] {subject}")
+        payload = json.dumps({
+            "from":    sender,
+            "to":      [to],
+            "subject": subject,
+            "html":    body
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            "https://api.resend.com/emails",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type":  "application/json"
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=15) as r:
+            resp = json.loads(r.read())
+            print(f"[EMAIL SENT] {subject} → {to} | id: {resp.get('id')}")
+    except urllib.error.HTTPError as e:
+        print(f"[EMAIL ERROR] HTTP {e.code}: {e.read().decode()}")
     except Exception as e:
-        print(f"[EMAIL ERROR] {e}")
+        print(f"[EMAIL ERROR] {type(e).__name__}: {e}")
 
 def send(to, subject, body):
-    if not SMTP_USER:
-        print(f"[EMAIL SKIPPED] {subject}"); return
-    import threading
     threading.Thread(target=_send_worker, args=(to, subject, body), daemon=True).start()
 
 def tr(k, v):
@@ -514,44 +526,43 @@ def cancel(token):
 @app.route("/test-email")
 def test_email():
     """Visit this URL to test if email is working."""
-    import smtplib
     results = []
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    sender  = os.environ.get("RESEND_FROM", "")
 
-    results.append(f"SMTP_USER set: {bool(SMTP_USER)} ({SMTP_USER})")
-    results.append(f"SMTP_PASS set: {bool(SMTP_PASS)} (length: {len(SMTP_PASS)})")
-    results.append(f"LAB_EMAIL_1: {os.environ.get('LAB_EMAIL_1', 'NOT SET')}")
-    results.append(f"LAB_EMAIL_2: {os.environ.get('LAB_EMAIL_2', 'NOT SET')}")
+    results.append(f"RESEND_API_KEY set: {'✅ YES' if api_key else '❌ NOT SET'}")
+    results.append(f"RESEND_FROM set: {sender if sender else '❌ NOT SET'}")
+    results.append(f"LAB_EMAIL_1: {os.environ.get('LAB_EMAIL_1', '❌ NOT SET')}")
+    results.append(f"LAB_EMAIL_2: {os.environ.get('LAB_EMAIL_2', 'not set (optional)')}")
     results.append(f"LAB_EMAILS list: {LAB_EMAILS}")
+    results.append("---")
 
-    # Try actual SMTP connection
-    try:
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=15) as s:
-            s.starttls()
-            s.login(SMTP_USER, SMTP_PASS)
-            results.append("SMTP LOGIN: ✅ SUCCESS")
+    if not api_key or not sender or not LAB_EMAILS:
+        results.append("❌ Cannot send — set RESEND_API_KEY, RESEND_FROM and LAB_EMAIL_1 in Render Environment.")
+    else:
+        for addr in LAB_EMAILS:
+            try:
+                payload = json.dumps({
+                    "from":    sender,
+                    "to":      [addr],
+                    "subject": "✅ Test — Office Hours App Email Working",
+                    "html":    "<p>Test email from your Office Hours Booking app. Email is working! ✅</p>"
+                }).encode("utf-8")
+                req = urllib.request.Request(
+                    "https://api.resend.com/emails",
+                    data=payload,
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=15) as r:
+                    resp = json.loads(r.read())
+                    results.append(f"✅ Test email sent to {addr} | id: {resp.get('id')}")
+            except urllib.error.HTTPError as e:
+                results.append(f"❌ Failed to {addr}: HTTP {e.code} — {e.read().decode()}")
+            except Exception as e:
+                results.append(f"❌ Failed to {addr}: {e}")
 
-            # Send a real test email to all lab emails
-            from email.mime.text import MIMEText
-            from email.mime.multipart import MIMEMultipart
-            for addr in LAB_EMAILS:
-                msg = MIMEMultipart("alternative")
-                msg["Subject"] = "✅ Test Email — Office Hours App is Working"
-                msg["From"]    = SMTP_USER
-                msg["To"]      = addr
-                msg.attach(MIMEText(
-                    f"<p>This is a test from your Office Hours Booking app.</p>"
-                    f"<p>If you see this, email is working correctly!</p>", "html"))
-                s.sendmail(SMTP_USER, [addr], msg.as_string())
-                results.append(f"Test email sent to: {addr} ✅")
-    except smtplib.SMTPAuthenticationError as e:
-        results.append(f"SMTP LOGIN: ❌ AUTH FAILED — {e}")
-        results.append("Fix: Check SMTP_USER and SMTP_PASS in Render Environment.")
-        results.append("SMTP_PASS must be a Gmail App Password, not your regular password.")
-    except Exception as e:
-        results.append(f"SMTP ERROR: ❌ {type(e).__name__}: {e}")
-
-    html = "<br>".join(results)
-    return f"<pre style=\"font-family:monospace;font-size:14px;padding:20px;line-height:2\">{chr(10).join(results)}</pre>"
+    return f"<pre style=\"font-family:monospace;font-size:14px;padding:24px;line-height:2\">" + "\n".join(results) + "</pre>"
 
 if __name__ == "__main__":
     app.run(debug=False)
