@@ -510,5 +510,48 @@ def cancel(token):
     return redirect(url_for("index"))
 
 
+
+@app.route("/test-email")
+def test_email():
+    """Visit this URL to test if email is working."""
+    import smtplib
+    results = []
+
+    results.append(f"SMTP_USER set: {bool(SMTP_USER)} ({SMTP_USER})")
+    results.append(f"SMTP_PASS set: {bool(SMTP_PASS)} (length: {len(SMTP_PASS)})")
+    results.append(f"LAB_EMAIL_1: {os.environ.get('LAB_EMAIL_1', 'NOT SET')}")
+    results.append(f"LAB_EMAIL_2: {os.environ.get('LAB_EMAIL_2', 'NOT SET')}")
+    results.append(f"LAB_EMAILS list: {LAB_EMAILS}")
+
+    # Try actual SMTP connection
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=15) as s:
+            s.starttls()
+            s.login(SMTP_USER, SMTP_PASS)
+            results.append("SMTP LOGIN: ✅ SUCCESS")
+
+            # Send a real test email to all lab emails
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+            for addr in LAB_EMAILS:
+                msg = MIMEMultipart("alternative")
+                msg["Subject"] = "✅ Test Email — Office Hours App is Working"
+                msg["From"]    = SMTP_USER
+                msg["To"]      = addr
+                msg.attach(MIMEText(
+                    f"<p>This is a test from your Office Hours Booking app.</p>"
+                    f"<p>If you see this, email is working correctly!</p>", "html"))
+                s.sendmail(SMTP_USER, [addr], msg.as_string())
+                results.append(f"Test email sent to: {addr} ✅")
+    except smtplib.SMTPAuthenticationError as e:
+        results.append(f"SMTP LOGIN: ❌ AUTH FAILED — {e}")
+        results.append("Fix: Check SMTP_USER and SMTP_PASS in Render Environment.")
+        results.append("SMTP_PASS must be a Gmail App Password, not your regular password.")
+    except Exception as e:
+        results.append(f"SMTP ERROR: ❌ {type(e).__name__}: {e}")
+
+    html = "<br>".join(results)
+    return f"<pre style=\"font-family:monospace;font-size:14px;padding:20px;line-height:2\">{chr(10).join(results)}</pre>"
+
 if __name__ == "__main__":
     app.run(debug=False)
