@@ -16,6 +16,13 @@ SLOT_HOURS     = list(range(10, 15))
 SEATS_PER_SLOT = 3
 DB             = "bookings.db"
 
+# Lab staff who receive ALL booking notifications
+LAB_EMAILS = [
+    os.environ.get("LAB_EMAIL_1", ""),   # you
+    os.environ.get("LAB_EMAIL_2", ""),   # your partner
+]
+LAB_EMAILS = [e for e in LAB_EMAILS if e]  # remove blanks
+
 # ── Database ───────────────────────────────────────────────
 def get_db():
     conn = sqlite3.connect(DB, check_same_thread=False)
@@ -180,6 +187,28 @@ def mail_confirm(b):
             f'</div>')
     send(b["email"], "Office Hours — Booking Confirmed", body)
 
+def mail_lab_staff(b, action="new"):
+    """Email both lab staff members about every booking or cancellation."""
+    if not LAB_EMAILS:
+        print("[EMAIL SKIPPED] No lab emails set in environment variables.")
+        return
+    lbl   = slot_label(b["slot_hour"])
+    icon  = "🔔 New Booking" if action == "new" else "❌ Booking Cancelled"
+    color = "#2563EB"        if action == "new" else "#DC2626"
+    subj  = f"New Booking – {b['name']} ({b['course']})" if action == "new" else f"Cancelled – {b['name']} ({b['course']})"
+    body  = (f'<div style="font-family:sans-serif;max-width:500px;margin:0 auto">'
+             f'<h2 style="color:{color}">{icon}</h2>'
+             f'<table style="border-collapse:collapse;width:100%;margin:16px 0">'
+             f'{tr("Student",    b["name"])}'
+             f'{tr("Email",      b["email"])}'
+             f'{tr("Course",     b["course"])}'
+             f'{tr("Instructor", b["instructor"])}'
+             f'{tr("Date",       b["slot_date"])}'
+             f'{tr("Time",       lbl)}'
+             f'</table></div>')
+    for addr in LAB_EMAILS:
+        send(addr, subj, body)
+
 def mail_cancel(b):
     lbl = slot_label(b["slot_hour"])
     home = url_for("index", _external=True)
@@ -324,6 +353,7 @@ def book():
         c.commit()
     b = by_token(tok)
     mail_confirm(b)
+    mail_lab_staff(b, "new")
     flash("Slot confirmed! Check your email for your manage link.", "success")
     return redirect(url_for("manage", token=tok))
 
@@ -475,6 +505,7 @@ def cancel(token):
         c.execute("UPDATE bookings SET status='cancelled' WHERE id=?", (b["id"],))
         c.commit()
     mail_cancel(b)
+    mail_lab_staff(b, "cancel")
     flash("Your booking has been cancelled.", "info")
     return redirect(url_for("index"))
 
