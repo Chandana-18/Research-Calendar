@@ -5,7 +5,8 @@ from email.mime.multipart import MIMEMultipart
 from flask import Flask, render_template, request, redirect, url_for, flash
 from apscheduler.schedulers.background import BackgroundScheduler
 
-app = Flask(__name__)
+import os as _os
+app = Flask(__name__, template_folder=_os.path.join(_os.path.dirname(__file__), "templates"))
 app.secret_key = os.environ.get("SECRET_KEY", "office-hours-secret")
 
 # ── Config (set these in Render Environment Variables) ────
@@ -35,8 +36,8 @@ with get_db() as _c:
 
 # ── Helpers ────────────────────────────────────────────────
 def slot_label(h):
-    s = datetime.strptime(str(h),   "%H").strftime("%-I:%M %p")
-    e = datetime.strptime(str(h+1), "%H").strftime("%-I:%M %p")
+    s = datetime.strptime(str(h),   "%H").strftime("%I:%M %p").lstrip("0")
+    e = datetime.strptime(str(h+1), "%H").strftime("%I:%M %p").lstrip("0")
     return f"{s} – {e}"
 
 def count(date, hour):
