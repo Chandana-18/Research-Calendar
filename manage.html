@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Your Booking{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+    <div class="card-title" style="margin-bottom:0">Your Booking</div>
+    {% if booking.status == "confirmed" %}<span class="badge badge-ok">Confirmed</span>
+    {% else %}<span class="badge badge-no">Cancelled</span>{% endif %}
+  </div>
+  <div class="card-sub">Your office-hours details. Edit or cancel below.</div>
+  <div class="detail-row"><span class="detail-label">Name</span><span>{{ booking.name }}</span></div>
+  <div class="detail-row"><span class="detail-label">Email</span><span>{{ booking.email }}</span></div>
+  <div class="detail-row"><span class="detail-label">Course</span><span>{{ booking.course }}</span></div>
+  <div class="detail-row"><span class="detail-label">Instructor</span><span>{{ booking.instructor }}</span></div>
+  <div class="detail-row"><span class="detail-label">Date</span><span>{{ booking.slot_date }}</span></div>
+  <div class="detail-row"><span class="detail-label">Time</span><span>{{ label }}</span></div>
+  {% if booking.status == "confirmed" %}
+  <div class="divider"></div>
+  <div class="actions">
+    <a href="/edit/{{ booking.token }}" class="btn btn-ghost">Edit / Rebook</a>
+    <form method="POST" action="/cancel/{{ booking.token }}"
+          onsubmit="return confirm('Cancel this booking?')">
+      <button type="submit" class="btn btn-danger">Cancel Booking</button>
+    </form>
+  </div>
+  {% else %}
+  <div style="margin-top:20px"><a href="/" class="btn btn-primary">Book a New Slot</a></div>
+  {% endif %}
+</div>
+<p style="font-size:13px;color:var(--muted)">Bookmark this page to manage your booking any time.</p>
+{% endblock %}

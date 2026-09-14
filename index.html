@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Book Office Hours{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-title">Book an Office Hours Slot</div>
+  <div class="card-sub">Pick a date, choose an open slot (max 3 students per hour), and fill in your details.</div>
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap">
+    <label for="date-picker" style="font-size:13px;font-weight:500;color:var(--muted)">Date</label>
+    <input type="date" id="date-picker" value="{{ date }}" min="{{ today }}"
+           style="padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;
+                  font-family:inherit;font-size:14px;outline:none;max-width:200px;width:auto">
+  </div>
+  <p style="font-size:13px;font-weight:500;color:var(--muted);margin-bottom:12px">Slots for {{ date }}</p>
+  <div class="slots-grid">
+    {% for s in slots %}
+    <label class="slot-card {{ 'full' if s.full }}" id="lbl-{{ s.hour }}">
+      <input type="radio" class="sr" name="sp" value="{{ s.hour }}"
+             {{ 'disabled' if s.full }} onchange="pick({{ s.hour }})">
+      <div class="slot-time">{{ s.label }}</div>
+      <div class="slot-avail">
+        {% if s.full %}Full
+        {% else %}{{ s.avail }} seat{{ 's' if s.avail != 1 }} left{% endif %}
+      </div>
+    </label>
+    {% endfor %}
+  </div>
+  <div class="divider"></div>
+  <form method="POST" action="/book" id="bf">
+    <input type="hidden" name="slot_date" value="{{ date }}">
+    <input type="hidden" name="slot_hour" id="sh" value="">
+    <div class="form-grid">
+      <div class="fg"><label>Full Name</label>
+        <input type="text" name="name" placeholder="e.g. Maria Chen" required></div>
+      <div class="fg"><label>Email Address</label>
+        <input type="email" name="email" placeholder="you@university.edu" required></div>
+      <div class="fg"><label>Course</label>
+        <select name="course" required>
+          <option value="">Select course...</option>
+          {% for c in courses %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+        </select></div>
+      <div class="fg"><label>Instructor</label>
+        <select name="instructor" required>
+          <option value="">Select instructor...</option>
+          {% for i in instructors %}<option value="{{ i }}">{{ i }}</option>{% endfor %}
+        </select></div>
+    </div>
+    <div style="margin-top:24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <button type="submit" class="btn btn-primary" id="sb" disabled>Confirm Booking</button>
+      <span id="hint" style="font-size:13px;color:var(--muted)">Select a time slot above to continue.</span>
+    </div>
+  </form>
+</div>
+<script>
+function pick(h){
+  document.querySelectorAll(".slot-card").forEach(c=>c.classList.remove("selected"));
+  var l=document.getElementById("lbl-"+h);
+  if(l&&!l.classList.contains("full")){
+    l.classList.add("selected");
+    document.getElementById("sh").value=h;
+    document.getElementById("sb").disabled=false;
+    document.getElementById("hint").textContent="Slot selected — fill in your details and confirm.";
+  }
+}
+document.getElementById("bf").addEventListener("submit",function(e){
+  if(!document.getElementById("sh").value){
+    e.preventDefault();
+    var h=document.getElementById("hint");
+    h.style.color="var(--danger)";
+    h.textContent="Please select a time slot first.";
+  }
+});
+</script>
+{% endblock %}

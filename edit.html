@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Edit Booking{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-title">Edit Your Booking</div>
+  <div class="card-sub">Change your slot, course, instructor, or details. A new confirmation email will be sent.</div>
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap">
+    <label for="date-picker" style="font-size:13px;font-weight:500;color:var(--muted)">Date</label>
+    <input type="date" id="date-picker" value="{{ date }}" min="{{ today }}"
+           style="padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;
+                  font-family:inherit;font-size:14px;outline:none;max-width:200px;width:auto">
+  </div>
+  <p style="font-size:13px;font-weight:500;color:var(--muted);margin-bottom:12px">Slots for {{ date }}</p>
+  <div class="slots-grid">
+    {% for s in slots %}
+    <label class="slot-card {{ 'full' if s.full }} {{ 'selected' if s.hour == booking.slot_hour and date == booking.slot_date }}"
+           id="lbl-{{ s.hour }}">
+      <input type="radio" class="sr" name="sp" value="{{ s.hour }}"
+             {{ 'disabled' if s.full }}
+             {{ 'checked' if s.hour == booking.slot_hour and date == booking.slot_date }}
+             onchange="pick({{ s.hour }})">
+      <div class="slot-time">{{ s.label }}</div>
+      <div class="slot-avail">{{ 'Full' if s.full else (s.avail|string + ' seats left') }}</div>
+    </label>
+    {% endfor %}
+  </div>
+  <div class="divider"></div>
+  <form method="POST" action="/edit/{{ booking.token }}">
+    <input type="hidden" name="slot_date" value="{{ date }}">
+    <input type="hidden" name="slot_hour" id="sh"
+           value="{{ '' if date != booking.slot_date else booking.slot_hour }}">
+    <div class="form-grid">
+      <div class="fg"><label>Full Name</label>
+        <input type="text" name="name" value="{{ booking.name }}" required></div>
+      <div class="fg"><label>Email Address</label>
+        <input type="email" name="email" value="{{ booking.email }}" required></div>
+      <div class="fg"><label>Course</label>
+        <select name="course" required>
+          {% for c in courses %}
+          <option value="{{ c }}" {{ 'selected' if c == booking.course }}>{{ c }}</option>
+          {% endfor %}
+        </select></div>
+      <div class="fg"><label>Instructor</label>
+        <select name="instructor" required>
+          {% for i in instructors %}
+          <option value="{{ i }}" {{ 'selected' if i == booking.instructor }}>{{ i }}</option>
+          {% endfor %}
+        </select></div>
+    </div>
+    <div class="actions">
+      <button type="submit" class="btn btn-primary">Save Changes</button>
+      <a href="/manage/{{ booking.token }}" class="btn btn-ghost">Go Back</a>
+    </div>
+  </form>
+</div>
+<script>
+function pick(h){
+  document.querySelectorAll(".slot-card").forEach(c=>c.classList.remove("selected"));
+  var l=document.getElementById("lbl-"+h);
+  if(l&&!l.classList.contains("full")){l.classList.add("selected");document.getElementById("sh").value=h;}
+}
+document.getElementById("date-picker").addEventListener("change",function(){
+  window.location.href="/edit/{{ booking.token }}?date="+this.value;
+});
+</script>
+{% endblock %}
